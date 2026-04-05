@@ -2,179 +2,337 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>音声録音 & 文字起こし</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whisper 音声文字起こし</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0e0e0f; --surface: #1a1a1c; --surface2: #222226;
-    --border: #2e2e33; --accent: #e8ff5a; --accent2: #5affb8;
-    --text: #f0f0f0; --dim: #888; --red: #ff5a5a; --r: 16px;
+    --bg: #0c0c0d; --surface: #161618; --surface2: #1e1e21;
+    --border: #2a2a2e; --accent: #e8ff5a; --accent2: #5affb8;
+    --text: #efefef; --dim: #777; --red: #ff5a5a; --r: 14px;
   }
   body {
     background: var(--bg); color: var(--text);
     font-family: 'Noto Sans JP', sans-serif;
     min-height: 100vh; display: flex;
     align-items: flex-start; justify-content: center;
-    padding: 32px 20px 60px;
-    -webkit-text-size-adjust: 100%;
+    padding: 36px 20px 60px;
   }
-  .wrap { width: 100%; max-width: 560px; }
+  .wrap { width: 100%; max-width: 580px; }
 
-  h1 { font-family: 'Space Mono', monospace; font-size: 13px; letter-spacing: .15em; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; }
-  .sub { font-size: 13px; color: var(--dim); font-weight: 300; margin-bottom: 20px; }
+  /* Header */
+  .hd { margin-bottom: 24px; }
+  .hd h1 { font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: .18em; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; }
+  .hd p  { font-size: 13px; color: var(--dim); }
 
-  /* Support badge */
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 20px; padding: 5px 14px;
-    font-size: 11px; color: var(--dim); margin-bottom: 20px;
+  /* Model loader */
+  .model-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 22px; margin-bottom: 16px;
   }
-  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
-  .badge.ok .dot { background: var(--accent2); }
-  .badge.warn .dot { background: #f0a500; }
-  .badge.bad .dot { background: var(--red); }
+  .model-title { font-size: 13px; font-weight: 500; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .model-title span { font-size: 11px; font-family: 'Space Mono', monospace; color: var(--dim); }
 
-  /* Mode toggle */
-  .toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 20px; }
-  .toggle-btn {
-    flex: 1; padding: 9px 0; border: none; border-radius: 7px;
-    background: transparent; color: var(--dim);
-    font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
-    cursor: pointer; transition: all .2s;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  .model-opts { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .model-opt {
+    padding: 7px 14px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--dim); font-size: 12px; cursor: pointer;
+    transition: all .2s; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
   }
-  .toggle-btn.on { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .model-opt.sel { border-color: var(--accent); color: var(--accent); background: rgba(232,255,90,.07); }
 
-  /* Card */
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 22px; margin-bottom: 16px; }
+  .btn-load {
+    width: 100%; padding: 11px 0; border-radius: 10px;
+    border: none; background: var(--accent); color: #000;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity .2s;
+  }
+  .btn-load:hover { opacity: .88; }
+  .btn-load:disabled { opacity: .35; cursor: default; }
 
-  /* Visualizer */
-  .viz-wrap { height: 52px; border-radius: 10px; overflow: hidden; background: var(--bg); border: 1px solid var(--border); margin-bottom: 22px; }
-  #viz { width: 100%; height: 100%; display: block; }
+  /* Progress bar */
+  .progress-wrap { margin-top: 12px; display: none; }
+  .progress-bar {
+    height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent2); border-radius: 2px;
+    width: 0%; transition: width .3s;
+  }
+  .progress-label { font-size: 11px; color: var(--dim); margin-top: 6px; font-family: 'Space Mono', monospace; }
+
+  /* Recorder card */
+  .rec-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 24px 20px; margin-bottom: 16px;
+  }
+
+  /* Waveform */
+  .viz { height: 52px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  #canvas { width: 100%; height: 100%; display: block; }
 
   /* Timer */
-  .timer { text-align: center; font-family: 'Space Mono', monospace; font-size: 40px; font-weight: 700; letter-spacing: .04em; margin-bottom: 22px; transition: color .3s; }
-  .timer.rec { color: var(--red); }
+  .timer { font-family: 'Space Mono', monospace; font-size: 38px; font-weight: 700; text-align: center; margin-bottom: 20px; transition: color .3s; letter-spacing: .04em; }
+  .timer.on { color: var(--red); }
 
   /* Controls */
-  .controls { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 12px; }
+
   .btn-rec {
-    width: 68px; height: 68px; border-radius: 50%;
+    width: 66px; height: 66px; border-radius: 50%;
     border: 3px solid var(--red); background: transparent;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background .2s;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent; transition: background .2s;
   }
-  .btn-rec .dot { width: 26px; height: 26px; border-radius: 50%; background: var(--red); transition: border-radius .25s, width .25s, height .25s; }
-  .btn-rec.on { animation: pulse 1.5s ease-out infinite; }
-  .btn-rec.on .dot { border-radius: 5px; width: 20px; height: 20px; }
-  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,90,90,.4)} 70%{box-shadow:0 0 0 12px rgba(255,90,90,0)} 100%{box-shadow:0 0 0 0 rgba(255,90,90,0)} }
+  .btn-rec:disabled { border-color: #444; cursor: default; }
+  .btn-rec .dot { width: 24px; height: 24px; border-radius: 50%; background: var(--red); transition: border-radius .25s, width .25s, height .25s; }
+  .btn-rec:disabled .dot { background: #444; }
+  .btn-rec.on { animation: ring 1.5s ease-out infinite; }
+  .btn-rec.on .dot { border-radius: 5px; width: 18px; height: 18px; }
+  @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(255,90,90,.4)} 70%{box-shadow:0 0 0 12px rgba(255,90,90,0)} 100%{box-shadow:0 0 0 0 rgba(255,90,90,0)} }
 
   .btn-sm {
-    height: 44px; padding: 0 18px; border-radius: 22px;
+    height: 42px; padding: 0 16px; border-radius: 21px;
     border: 1px solid var(--border); background: var(--surface2);
     color: var(--dim); font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
-    cursor: pointer; transition: all .2s; white-space: nowrap;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    cursor: pointer; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent; transition: all .2s;
   }
   .btn-sm:disabled { opacity: .3; pointer-events: none; }
-  .btn-sm.primary { background: var(--accent); color: #000; border-color: transparent; font-weight: 500; }
-  .btn-sm.primary:disabled { opacity: .3; }
+  .btn-sm.accent { background: rgba(90,255,184,.12); border-color: var(--accent2); color: var(--accent2); font-weight: 500; }
+  .btn-sm.accent:disabled { opacity: .3; }
 
-  .status { font-size: 12px; color: var(--dim); text-align: center; margin-top: 14px; min-height: 18px; }
-  .status.go  { color: var(--accent2); }
-  .status.err { color: var(--red); }
+  .st { font-size: 12px; color: var(--dim); text-align: center; margin-top: 12px; min-height: 18px; }
+  .st.go  { color: var(--accent2); }
+  .st.err { color: var(--red); }
+  .st.warn { color: #f0a500; }
 
   /* Recordings */
-  .sec-label { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; margin-bottom: 10px; }
-  .rec-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-  .rec-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; display: flex; align-items: center; gap: 10px; transition: border-color .2s; }
+  .sec { margin-bottom: 14px; }
+  .sec-lbl { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin-bottom: 8px; }
+  .rec-list { display: flex; flex-direction: column; gap: 7px; }
+
+  .rec-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 11px; padding: 11px 13px;
+    display: flex; align-items: center; gap: 9px;
+  }
   .rec-item.sel { border-color: var(--accent2); }
-  .play-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  .rec-meta { flex: 1; min-width: 0; }
-  .rec-name { font-size: 13px; font-weight: 500; margin-bottom: 1px; }
-  .rec-dur  { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--dim); }
-  .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  .pbtn {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); font-size: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .rmeta { flex: 1; min-width: 0; }
+  .rname { font-size: 13px; font-weight: 500; margin-bottom: 1px; }
+  .rdur  { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--dim); }
+  .acts { display: flex; gap: 5px; }
+  .ibtn {
+    width: 28px; height: 28px; border-radius: 7px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--dim); font-size: 11px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; transition: all .2s;
+  }
+  .ibtn:hover { border-color: var(--red); color: var(--red); }
 
   /* Transcript */
-  .transcript-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
-  .transcript-head { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .transcript-label { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
-  .transcript-body { padding: 18px; min-height: 110px; max-height: 280px; overflow-y: auto; font-size: 15px; line-height: 1.8; font-weight: 300; white-space: pre-wrap; word-break: break-all; }
-  .transcript-body::-webkit-scrollbar { width: 4px; }
-  .transcript-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .tx-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  .tx-head { padding: 11px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .tx-lbl  { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+  .tx-body {
+    padding: 16px; min-height: 100px; max-height: 300px; overflow-y: auto;
+    font-size: 15px; line-height: 1.85; font-weight: 300;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .tx-body::-webkit-scrollbar { width: 4px; }
+  .tx-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   .ph { color: var(--dim); font-size: 13px; }
-  .interim { color: var(--dim); }
-  @keyframes blink { 50%{opacity:0} }
-  .cur { animation: blink .8s step-end infinite; }
+
+  /* Transcribing overlay in tx-body */
+  .tx-progress { display: flex; flex-direction: column; gap: 10px; }
+  .tx-progress .bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .tx-progress .fill { height: 100%; background: var(--accent2); border-radius: 2px; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0%{width:0%;margin-left:0} 50%{width:60%;margin-left:20%} 100%{width:0%;margin-left:100%} }
+  .tx-progress p { font-size: 12px; color: var(--dim); }
+
+  /* Compat notice */
+  .notice {
+    background: rgba(240,165,0,.07); border: 1px solid rgba(240,165,0,.25);
+    border-radius: 10px; padding: 12px 15px;
+    font-size: 12px; color: var(--dim); line-height: 1.65; margin-bottom: 14px;
+  }
+  .notice strong { color: #f0a500; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Voice Recorder</h1>
-  <p class="sub">無料・ブラウザ内完結の音声文字起こし</p>
 
-  <div class="badge" id="badge"><span class="dot"></span><span id="badgeText">確認中...</span></div>
-
-  <div class="toggle">
-    <button class="toggle-btn on" id="tabA" onclick="setMode('A')">🎙 録音 → 文字起こし</button>
-    <button class="toggle-btn"    id="tabB" onclick="setMode('B')">⚡ リアルタイム認識</button>
+  <div class="hd">
+    <h1>Whisper Transcriber</h1>
+    <p>録音した音声をWhisperで直接文字起こし（完全無料・ブラウザ完結）</p>
   </div>
 
-  <div class="card">
-    <div class="viz-wrap"><canvas id="viz"></canvas></div>
+  <!-- Compat notice -->
+  <div class="notice" id="compatNotice" style="display:none">
+    <strong>⚠ 注意：</strong> このツールは <strong>SharedArrayBuffer</strong> を必要とします。
+    iPhoneのSafariでは動作しない場合があります。
+    <strong>Mac / Windows の Chrome または Firefox</strong> を推奨します。
+  </div>
+
+  <!-- Model loader -->
+  <div class="model-card">
+    <div class="model-title">
+      モデルを選択してダウンロード
+      <span>— 初回のみ必要、以降はキャッシュされます</span>
+    </div>
+    <div class="model-opts">
+      <button class="model-opt sel" data-model="onnx-community/whisper-tiny" data-size="〜40MB">tiny（速い・軽量）</button>
+      <button class="model-opt" data-model="onnx-community/whisper-base" data-size="〜80MB">base（バランス）</button>
+      <button class="model-opt" data-model="onnx-community/whisper-small" data-size="〜250MB">small（高精度）</button>
+    </div>
+    <button class="btn-load" id="btnLoad" onclick="loadModel()">モデルを読み込む</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">準備中...</div>
+    </div>
+  </div>
+
+  <!-- Recorder -->
+  <div class="rec-card">
+    <div class="viz"><canvas id="canvas"></canvas></div>
     <div class="timer" id="timer">00:00</div>
     <div class="controls">
       <button class="btn-sm" id="btnClear" disabled onclick="clearAll()">クリア</button>
-      <button class="btn-rec" id="btnRec" onclick="toggle()"><div class="dot"></div></button>
-      <button class="btn-sm primary" id="btnTr" disabled style="display:none" onclick="doTranscribe()">文字起こし</button>
+      <button class="btn-rec" id="btnRec" disabled onclick="toggleRec()"><div class="dot"></div></button>
+      <button class="btn-sm accent" id="btnTx" disabled onclick="transcribe()">文字起こし ✦</button>
     </div>
-    <div class="status" id="status"></div>
+    <div class="st" id="st"></div>
   </div>
 
-  <div id="recSection" style="display:none">
-    <div class="sec-label">録音一覧</div>
+  <!-- Recordings list -->
+  <div class="sec" id="recSec" style="display:none">
+    <div class="sec-lbl">録音一覧</div>
     <div class="rec-list" id="recList"></div>
   </div>
 
-  <div class="transcript-card">
-    <div class="transcript-head">
-      <span class="transcript-label">文字起こし結果</span>
-      <button class="icon-btn" onclick="copyText()" id="btnCopy">📋</button>
+  <!-- Transcript -->
+  <div class="tx-card">
+    <div class="tx-head">
+      <span class="tx-lbl">文字起こし結果</span>
+      <button class="ibtn" onclick="copyTx()" id="btnCopy" style="width:auto;padding:0 8px;font-size:11px">📋 コピー</button>
     </div>
-    <div class="transcript-body" id="tBody"><span class="ph">モードを選んで録音を開始してください</span></div>
+    <div class="tx-body" id="txBody"><span class="ph">まずモデルを読み込んでください</span></div>
   </div>
+
 </div>
 
-<script>
-// ── globals ──────────────────────────────────────────────
-let mode = 'A', isRec = false;
+<script type="module">
+// ── Transformers.js (CDN) ────────────────────────────────
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1';
+
+// Cache models in IndexedDB
+env.allowLocalModels = false;
+env.useBrowserCache  = true;
+
+// ── State ────────────────────────────────────────────────
+let transcriber = null;
+let selectedModel = 'onnx-community/whisper-tiny';
+let isLoading = false;
+let isRec = false;
 let mediaRec = null, chunks = [], stream = null;
 let timerSec = 0, timerInt = null;
 let recordings = [], selIdx = null, playAudio = null;
 let audioCtx = null, analyser = null, animId = null;
-let recognition = null, finalTx = '', interimTx = '';
 
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-const hasMR  = !!window.MediaRecorder;
-const hasSR  = !!SpeechRec;
+// ── DOM ──────────────────────────────────────────────────
+const canvas   = document.getElementById('canvas');
+const ctx2d    = canvas.getContext('2d');
+const timerEl  = document.getElementById('timer');
+const stEl     = document.getElementById('st');
+const txBody   = document.getElementById('txBody');
+const btnRec   = document.getElementById('btnRec');
+const btnTx    = document.getElementById('btnTx');
+const btnClear = document.getElementById('btnClear');
+const btnLoad  = document.getElementById('btnLoad');
 
-// DOM shortcuts
-const $ = id => document.getElementById(id);
-const canvas = $('viz'), ctx2d = canvas.getContext('2d');
-
-// ── badge ─────────────────────────────────────────────────
-{
-  const b = $('badge');
-  if (hasMR && hasSR) { b.classList.add('ok'); $('badgeText').textContent = '両モード対応（Safari / Chrome OK）'; }
-  else if (hasMR)     { b.classList.add('warn'); $('badgeText').textContent = 'モードAのみ対応'; }
-  else                { b.classList.add('bad');  $('badgeText').textContent = '録音非対応のブラウザです'; }
+// ── Compat check ─────────────────────────────────────────
+if (!window.crossOriginIsolated) {
+  document.getElementById('compatNotice').style.display = 'block';
 }
 
-// ── canvas ────────────────────────────────────────────────
+// ── Model selection ──────────────────────────────────────
+document.querySelectorAll('.model-opt').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.model-opt').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    selectedModel = btn.dataset.model;
+    const size = btn.dataset.size;
+    btnLoad.textContent = `モデルを読み込む（${size}）`;
+  };
+});
+// Init label
+document.querySelector('.model-opt.sel').click();
+
+// ── Load model ───────────────────────────────────────────
+window.loadModel = async function() {
+  if (isLoading) return;
+  isLoading = true;
+  btnLoad.disabled = true;
+  btnLoad.textContent = '読み込み中...';
+
+  const pw = document.getElementById('progressWrap');
+  const pf = document.getElementById('progressFill');
+  const pl = document.getElementById('progressLabel');
+  pw.style.display = 'block';
+
+  try {
+    transcriber = await pipeline(
+      'automatic-speech-recognition',
+      selectedModel,
+      {
+        dtype: 'q8',   // quantized = smaller & faster
+        progress_callback: (p) => {
+          if (p.status === 'downloading' || p.status === 'progress') {
+            const pct = p.progress ? Math.round(p.progress) : 0;
+            pf.style.width = pct + '%';
+            pl.textContent = `ダウンロード中: ${p.file || ''} ${pct}%`;
+          }
+          if (p.status === 'loading') {
+            pl.textContent = 'モデルを初期化中...';
+          }
+          if (p.status === 'ready' || p.status === 'done') {
+            pf.style.width = '100%';
+            pl.textContent = '完了';
+          }
+        }
+      }
+    );
+
+    pf.style.width = '100%';
+    pl.textContent = 'モデル読み込み完了 ✓';
+    btnLoad.textContent = '✓ 読み込み済み（再読み込み）';
+    btnLoad.disabled = false;
+    btnRec.disabled  = false;
+    st('録音ボタンを押して開始してください', 'go');
+
+  } catch(e) {
+    console.error(e);
+    pl.textContent = 'エラー: ' + e.message;
+    btnLoad.textContent = '再試行';
+    btnLoad.disabled = false;
+    st('モデルの読み込みに失敗しました', 'err');
+  }
+  isLoading = false;
+};
+
+// ── Canvas ───────────────────────────────────────────────
 function resize() {
   const dpr = devicePixelRatio || 1;
   canvas.width  = canvas.offsetWidth  * dpr;
@@ -182,13 +340,13 @@ function resize() {
   ctx2d.scale(dpr, dpr);
 }
 resize();
-addEventListener('resize', () => { resize(); if (!isRec) idle(); });
+window.addEventListener('resize', () => { resize(); if (!isRec) idle(); });
 
 function idle() {
   const w = canvas.offsetWidth, h = canvas.offsetHeight;
-  ctx2d.clearRect(0, 0, w, h);
-  ctx2d.strokeStyle = '#2e2e33'; ctx2d.lineWidth = 1.5;
-  ctx2d.beginPath(); ctx2d.moveTo(0, h/2); ctx2d.lineTo(w, h/2); ctx2d.stroke();
+  ctx2d.clearRect(0,0,w,h);
+  ctx2d.strokeStyle = '#2a2a2e'; ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath(); ctx2d.moveTo(0,h/2); ctx2d.lineTo(w,h/2); ctx2d.stroke();
 }
 idle();
 
@@ -197,38 +355,29 @@ function wave() {
   const buf = new Uint8Array(analyser.frequencyBinCount);
   analyser.getByteTimeDomainData(buf);
   const w = canvas.offsetWidth, h = canvas.offsetHeight;
-  ctx2d.clearRect(0, 0, w, h);
-  ctx2d.strokeStyle = mode === 'B' ? '#5affb8' : '#ff5a5a';
-  ctx2d.lineWidth = 2;
+  ctx2d.clearRect(0,0,w,h);
+  ctx2d.strokeStyle = '#ff5a5a'; ctx2d.lineWidth = 2;
   ctx2d.beginPath();
-  buf.forEach((v, i) => {
-    const y = (v / 128) * h / 2;
-    i === 0 ? ctx2d.moveTo(0, y) : ctx2d.lineTo(i * (w / buf.length), y);
+  buf.forEach((v,i) => {
+    const y = (v/128)*h/2;
+    i===0 ? ctx2d.moveTo(0,y) : ctx2d.lineTo(i*(w/buf.length),y);
   });
-  ctx2d.lineTo(w, h/2); ctx2d.stroke();
+  ctx2d.lineTo(w,h/2); ctx2d.stroke();
   animId = requestAnimationFrame(wave);
 }
 
-// ── timer ─────────────────────────────────────────────────
-function startTimer() { timerSec = 0; timerInt = setInterval(() => { timerSec++; $('timer').textContent = fmt(timerSec); }, 1000); }
-function stopTimer()  { clearInterval(timerInt); }
-function fmt(s)       { return String(~~(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
+// ── Timer ────────────────────────────────────────────────
+function fmt(s) { return String(~~(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function startTimer() { timerSec=0; timerInt=setInterval(()=>{ timerSec++; timerEl.textContent=fmt(timerSec); },1000); }
+function stopTimer() { clearInterval(timerInt); }
 
-// ── mode ──────────────────────────────────────────────────
-function setMode(m) {
-  if (isRec) return;
-  mode = m;
-  $('tabA').classList.toggle('on', m === 'A');
-  $('tabB').classList.toggle('on', m === 'B');
-  $('btnTr').style.display = m === 'A' ? '' : 'none';
-  setTx('<span class="ph">モードを選んで録音を開始してください</span>');
-  st('', '');
-}
+// ── Record ───────────────────────────────────────────────
+window.toggleRec = async function() {
+  if (!transcriber) { st('先にモデルを読み込んでください', 'warn'); return; }
+  isRec ? stopRec() : await startRec();
+};
 
-// ── main toggle ───────────────────────────────────────────
-function toggle() { isRec ? stop() : start(); }
-
-async function start() {
+async function startRec() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   } catch(e) {
@@ -241,213 +390,189 @@ async function start() {
   audioCtx.createMediaStreamSource(stream).connect(analyser);
   wave();
 
-  isRec = true;
-  $('btnRec').classList.add('on');
-  $('timer').classList.add('rec');
-  startTimer();
-
-  if (mode === 'A') startA();
-  else              startB();
-}
-
-function stop() {
-  if (mode === 'A') stopA();
-  else              stopB();
-
-  isRec = false;
-  $('btnRec').classList.remove('on');
-  $('timer').classList.remove('rec');
-  stopTimer();
-  cancelAnimationFrame(animId);
-  if (audioCtx) { audioCtx.close(); audioCtx = null; analyser = null; }
-  idle();
-}
-
-// ── Mode A ────────────────────────────────────────────────
-function startA() {
+  // Recorder — prefer mp4 for Safari
   chunks = [];
-  const mime = ['audio/mp4','audio/webm','audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const mime = ['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
   mediaRec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
   mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
   mediaRec.onstop = () => {
     stream.getTracks().forEach(t => t.stop());
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     const url  = URL.createObjectURL(blob);
-    recordings.push({ blob, url, name: `録音 ${recordings.length + 1}`, dur: timerSec, tx: null });
+    recordings.push({ blob, url, name:`録音 ${recordings.length+1}`, dur:timerSec, tx:null });
     selIdx = recordings.length - 1;
-    $('btnClear').disabled = false;
-    $('btnTr').disabled    = false;
+    btnTx.disabled    = false;
+    btnClear.disabled = false;
     renderRecs();
-    st('録音完了。「文字起こし」を押してください', '');
+    st('録音完了。「文字起こし ✦」を押してください', '');
   };
   mediaRec.start(200);
+
+  isRec = true;
+  btnRec.classList.add('on');
+  timerEl.classList.add('on');
+  btnTx.disabled = true;
+  startTimer();
   st('録音中...', 'go');
 }
 
-function stopA() {
-  mediaRec.stop(); // onstop fires async
+function stopRec() {
+  mediaRec.stop();
+  isRec = false;
+  btnRec.classList.remove('on');
+  timerEl.classList.remove('on');
+  stopTimer();
+  cancelAnimationFrame(animId);
+  if (audioCtx) { audioCtx.close(); audioCtx=null; analyser=null; }
+  idle();
 }
 
-// ── Mode B ────────────────────────────────────────────────
-function startB() {
-  if (!hasSR) { st('このブラウザはリアルタイム認識に非対応です', 'err'); stop(); return; }
-  finalTx = ''; interimTx = '';
-  setTx('<span id="liveSpan"></span>');
-
-  recognition = new SpeechRec();
-  recognition.lang = 'ja-JP';
-  recognition.continuous = true;
-  recognition.interimResults = true;
-
-  recognition.onresult = e => {
-    interimTx = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      e.results[i].isFinal ? finalTx += t : interimTx = t;
-    }
-    const el = $('liveSpan');
-    if (el) el.innerHTML =
-      (finalTx ? `<span>${finalTx}</span>` : '') +
-      (interimTx ? `<span class="interim">${interimTx}</span>` : '') +
-      '<span class="cur">|</span>';
-  };
-
-  recognition.onerror = e => {
-    if (e.error !== 'aborted' && e.error !== 'no-speech') st('認識エラー: ' + e.error, 'err');
-  };
-
-  // Auto-restart (iOS sometimes stops mid-session)
-  recognition.onend = () => { if (isRec) { try { recognition.start(); } catch(_){} } };
-
-  recognition.start();
-  $('btnClear').disabled = false;
-  st('話してください（リアルタイムで認識します）', 'go');
-}
-
-function stopB() {
-  if (recognition) { try { recognition.abort(); } catch(_){} recognition = null; }
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  const el = $('liveSpan');
-  if (el) { const cur = el.querySelector('.cur'); if (cur) cur.remove(); }
-  st('認識完了', '');
-}
-
-// ── Mode A: transcribe via Web Speech ────────────────────
-function doTranscribe() {
-  if (selIdx === null) return;
-  if (!hasSR) { st('このブラウザは音声認識に非対応です。モードBをお試しください', 'err'); return; }
-
+// ── Transcribe ───────────────────────────────────────────
+window.transcribe = async function() {
+  if (!transcriber || selIdx === null) return;
   const rec = recordings[selIdx];
-  $('btnTr').disabled = true;
-  st('文字起こし中（音声を再生して認識しています）...', 'go');
-  setTx('<span class="ph">認識中<span class="cur">|</span></span>');
 
-  let result = '';
-  const recog = new SpeechRec();
-  recog.lang = 'ja-JP';
-  recog.continuous = true;
-  recog.interimResults = false;
+  btnTx.disabled = true;
+  btnRec.disabled = true;
+  txBody.innerHTML = `
+    <div class="tx-progress">
+      <p>Whisperで解析中... しばらくお待ちください</p>
+      <div class="bar"><div class="fill"></div></div>
+    </div>`;
+  st('文字起こし処理中...', 'go');
 
-  recog.onresult = e => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) result += e.results[i][0].transcript;
+  try {
+    // Convert blob → ArrayBuffer → AudioBuffer → Float32Array @16kHz
+    const arrayBuf = await rec.blob.arrayBuffer();
+    const decodeCtx = new AudioContext({ sampleRate: 16000 });
+    let audioBuf;
+    try {
+      audioBuf = await decodeCtx.decodeAudioData(arrayBuf);
+    } catch(e) {
+      // Fallback: try re-encoding via OfflineAudioContext
+      throw new Error('音声のデコードに失敗しました。別の形式で試してください。');
     }
-  };
 
-  recog.onerror = e => { st('認識エラー: ' + e.error, 'err'); };
+    // Mix down to mono Float32Array
+    const float32 = mixToMono(audioBuf);
+    decodeCtx.close();
 
-  recog.onend = () => {
-    rec.tx = result || '（認識できませんでした）';
-    $('tBody').textContent = rec.tx;
-    $('btnTr').disabled = false;
-    st('完了', '');
+    // Run Whisper
+    const result = await transcriber(float32, {
+      language: 'japanese',
+      task: 'transcribe',
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      return_timestamps: false,
+    });
+
+    const text = Array.isArray(result)
+      ? result.map(r => r.text).join('')
+      : (result.text || '（認識結果なし）');
+
+    rec.tx = text.trim();
+    txBody.textContent = rec.tx;
     renderRecs();
-  };
+    st('文字起こし完了', '');
 
-  const audio = new Audio(rec.url);
-  recog.start();
-  audio.play().catch(() => {});
-  audio.onended = () => { setTimeout(() => { try { recog.stop(); } catch(_){} }, 800); };
+  } catch(e) {
+    console.error(e);
+    txBody.innerHTML = `<span class="ph">エラー: ${e.message}</span>`;
+    st('文字起こしに失敗しました', 'err');
+  }
+
+  btnTx.disabled  = false;
+  btnRec.disabled = false;
+};
+
+function mixToMono(audioBuf) {
+  const len = audioBuf.length;
+  const out = new Float32Array(len);
+  const nCh = audioBuf.numberOfChannels;
+  for (let ch = 0; ch < nCh; ch++) {
+    const chData = audioBuf.getChannelData(ch);
+    for (let i = 0; i < len; i++) out[i] += chData[i];
+  }
+  if (nCh > 1) for (let i = 0; i < len; i++) out[i] /= nCh;
+  return out;
 }
 
-// ── Recordings list ───────────────────────────────────────
+// ── Recordings list ──────────────────────────────────────
 function renderRecs() {
-  if (!recordings.length) { $('recSection').style.display = 'none'; return; }
-  $('recSection').style.display = 'block';
-  const list = $('recList');
+  const sec  = document.getElementById('recSec');
+  const list = document.getElementById('recList');
+  if (!recordings.length) { sec.style.display='none'; return; }
+  sec.style.display = 'block';
   list.innerHTML = '';
 
   recordings.forEach((r, i) => {
     const div = document.createElement('div');
-    div.className = 'rec-item' + (i === selIdx ? ' sel' : '');
+    div.className = 'rec-item' + (i===selIdx?' sel':'');
 
     const pb = document.createElement('button');
-    pb.className = 'play-btn'; pb.textContent = '▶';
+    pb.className = 'pbtn'; pb.textContent = '▶';
     pb.onclick = () => {
-      if (playAudio) { playAudio.pause(); playAudio = null; }
+      if (playAudio) { playAudio.pause(); playAudio=null; }
       playAudio = new Audio(r.url);
-      playAudio.play().catch(() => st('再生できませんでした', 'err'));
+      playAudio.play().catch(()=>{});
       pb.textContent = '■';
-      playAudio.onended = () => { pb.textContent = '▶'; playAudio = null; };
+      playAudio.onended = () => { pb.textContent='▶'; playAudio=null; };
     };
 
     const meta = document.createElement('div');
-    meta.className = 'rec-meta';
-    meta.innerHTML = `<div class="rec-name">${r.name}${r.tx ? ' ✓' : ''}</div><div class="rec-dur">${fmt(r.dur)}</div>`;
+    meta.className = 'rmeta';
+    meta.innerHTML = `<div class="rname">${r.name}${r.tx?' ✓':''}</div><div class="rdur">${fmt(r.dur)}</div>`;
 
     const selBtn = document.createElement('button');
-    selBtn.className = 'icon-btn'; selBtn.textContent = '✎'; selBtn.title = '選択';
+    selBtn.className='ibtn'; selBtn.textContent='✎'; selBtn.title='選択';
     selBtn.onclick = () => {
-      selIdx = i;
-      $('btnTr').disabled = false;
-      $('tBody')[r.tx ? 'textContent' : 'innerHTML'] = r.tx || '<span class="ph">「文字起こし」を押してください</span>';
+      selIdx = i; btnTx.disabled = false;
+      txBody[r.tx?'textContent':'innerHTML'] = r.tx||'<span class="ph">「文字起こし ✦」を押してください</span>';
       renderRecs();
     };
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'icon-btn'; delBtn.textContent = '✕'; delBtn.title = '削除';
-    delBtn.onclick = () => {
+    const del = document.createElement('button');
+    del.className='ibtn'; del.textContent='✕'; del.title='削除';
+    del.onclick = () => {
       URL.revokeObjectURL(r.url);
-      recordings.splice(i, 1);
-      if (selIdx === i) selIdx = recordings.length ? 0 : null;
-      else if (selIdx > i) selIdx--;
-      if (!recordings.length) { $('btnTr').disabled = true; $('btnClear').disabled = true; }
+      recordings.splice(i,1);
+      if (selIdx===i) selIdx = recordings.length?0:null;
+      else if (selIdx>i) selIdx--;
+      if (!recordings.length) { btnTx.disabled=true; btnClear.disabled=true; }
       renderRecs();
     };
 
     const acts = document.createElement('div');
-    acts.style.cssText = 'display:flex;gap:6px';
-    acts.append(selBtn, delBtn);
-
+    acts.className = 'acts';
+    acts.append(selBtn, del);
     div.append(pb, meta, acts);
     list.appendChild(div);
   });
 }
 
-// ── utilities ─────────────────────────────────────────────
-function clearAll() {
+// ── Utilities ────────────────────────────────────────────
+window.clearAll = function() {
   recordings.forEach(r => URL.revokeObjectURL(r.url));
-  recordings = []; selIdx = null; finalTx = ''; interimTx = '';
-  $('timer').textContent = '00:00'; timerSec = 0;
-  $('btnTr').disabled = true; $('btnClear').disabled = true;
-  setTx('<span class="ph">モードを選んで録音を開始してください</span>');
-  renderRecs(); st('', ''); idle();
-}
+  recordings=[]; selIdx=null; timerEl.textContent='00:00'; timerSec=0;
+  btnTx.disabled=true; btnClear.disabled=true;
+  txBody.innerHTML='<span class="ph">録音後、文字起こしボタンを押してください</span>';
+  renderRecs(); st('',''); idle();
+};
 
-function copyText() {
-  const t = $('tBody').innerText?.trim();
-  if (!t || $('tBody').querySelector('.ph')) return;
+window.copyTx = function() {
+  const t = txBody.innerText?.trim();
+  if (!t || txBody.querySelector('.ph')) return;
   navigator.clipboard.writeText(t).then(() => {
-    $('btnCopy').textContent = '✅';
-    setTimeout(() => $('btnCopy').textContent = '📋', 1500);
+    const b = document.getElementById('btnCopy');
+    b.textContent='✅ コピー済み';
+    setTimeout(()=>{ b.textContent='📋 コピー'; },1800);
   });
-}
+};
 
-function setTx(html) { $('tBody').innerHTML = html; }
 function st(msg, cls) {
-  const el = $('status');
-  el.textContent = msg;
-  el.className = 'status' + (cls ? ' ' + cls : '');
+  stEl.textContent = msg;
+  stEl.className = 'st' + (cls?' '+cls:'');
 }
 </script>
 </body>
