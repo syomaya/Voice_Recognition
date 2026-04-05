@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>音声録音 & 文字起こし</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0e0f; --surface: #1a1a1c; --surface2: #222226;
+    --border: #2e2e33; --accent: #e8ff5a; --accent2: #5affb8;
+    --text: #f0f0f0; --dim: #888; --red: #ff5a5a; --r: 16px;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh; display: flex;
+    align-items: flex-start; justify-content: center;
+    padding: 32px 20px 60px;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { width: 100%; max-width: 560px; }
+
+  h1 { font-family: 'Space Mono', monospace; font-size: 13px; letter-spacing: .15em; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--dim); font-weight: 300; margin-bottom: 20px; }
+
+  /* Support badge */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 5px 14px;
+    font-size: 11px; color: var(--dim); margin-bottom: 20px;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+  .badge.ok .dot { background: var(--accent2); }
+  .badge.warn .dot { background: #f0a500; }
+  .badge.bad .dot { background: var(--red); }
+
+  /* Mode toggle */
+  .toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 20px; }
+  .toggle-btn {
+    flex: 1; padding: 9px 0; border: none; border-radius: 7px;
+    background: transparent; color: var(--dim);
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    cursor: pointer; transition: all .2s;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .toggle-btn.on { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+  /* Card */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 22px; margin-bottom: 16px; }
+
+  /* Visualizer */
+  .viz-wrap { height: 52px; border-radius: 10px; overflow: hidden; background: var(--bg); border: 1px solid var(--border); margin-bottom: 22px; }
+  #viz { width: 100%; height: 100%; display: block; }
+
+  /* Timer */
+  .timer { text-align: center; font-family: 'Space Mono', monospace; font-size: 40px; font-weight: 700; letter-spacing: .04em; margin-bottom: 22px; transition: color .3s; }
+  .timer.rec { color: var(--red); }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .btn-rec {
+    width: 68px; height: 68px; border-radius: 50%;
+    border: 3px solid var(--red); background: transparent;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .2s;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .btn-rec .dot { width: 26px; height: 26px; border-radius: 50%; background: var(--red); transition: border-radius .25s, width .25s, height .25s; }
+  .btn-rec.on { animation: pulse 1.5s ease-out infinite; }
+  .btn-rec.on .dot { border-radius: 5px; width: 20px; height: 20px; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,90,90,.4)} 70%{box-shadow:0 0 0 12px rgba(255,90,90,0)} 100%{box-shadow:0 0 0 0 rgba(255,90,90,0)} }
+
+  .btn-sm {
+    height: 44px; padding: 0 18px; border-radius: 22px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--dim); font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    cursor: pointer; transition: all .2s; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .btn-sm:disabled { opacity: .3; pointer-events: none; }
+  .btn-sm.primary { background: var(--accent); color: #000; border-color: transparent; font-weight: 500; }
+  .btn-sm.primary:disabled { opacity: .3; }
+
+  .status { font-size: 12px; color: var(--dim); text-align: center; margin-top: 14px; min-height: 18px; }
+  .status.go  { color: var(--accent2); }
+  .status.err { color: var(--red); }
+
+  /* Recordings */
+  .sec-label { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; margin-bottom: 10px; }
+  .rec-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .rec-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; display: flex; align-items: center; gap: 10px; transition: border-color .2s; }
+  .rec-item.sel { border-color: var(--accent2); }
+  .play-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .rec-meta { flex: 1; min-width: 0; }
+  .rec-name { font-size: 13px; font-weight: 500; margin-bottom: 1px; }
+  .rec-dur  { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--dim); }
+  .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  /* Transcript */
+  .transcript-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  .transcript-head { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .transcript-label { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  .transcript-body { padding: 18px; min-height: 110px; max-height: 280px; overflow-y: auto; font-size: 15px; line-height: 1.8; font-weight: 300; white-space: pre-wrap; word-break: break-all; }
+  .transcript-body::-webkit-scrollbar { width: 4px; }
+  .transcript-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .ph { color: var(--dim); font-size: 13px; }
+  .interim { color: var(--dim); }
+  @keyframes blink { 50%{opacity:0} }
+  .cur { animation: blink .8s step-end infinite; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Voice Recorder</h1>
+  <p class="sub">無料・ブラウザ内完結の音声文字起こし</p>
+
+  <div class="badge" id="badge"><span class="dot"></span><span id="badgeText">確認中...</span></div>
+
+  <div class="toggle">
+    <button class="toggle-btn on" id="tabA" onclick="setMode('A')">🎙 録音 → 文字起こし</button>
+    <button class="toggle-btn"    id="tabB" onclick="setMode('B')">⚡ リアルタイム認識</button>
+  </div>
+
+  <div class="card">
+    <div class="viz-wrap"><canvas id="viz"></canvas></div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="controls">
+      <button class="btn-sm" id="btnClear" disabled onclick="clearAll()">クリア</button>
+      <button class="btn-rec" id="btnRec" onclick="toggle()"><div class="dot"></div></button>
+      <button class="btn-sm primary" id="btnTr" disabled style="display:none" onclick="doTranscribe()">文字起こし</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="recSection" style="display:none">
+    <div class="sec-label">録音一覧</div>
+    <div class="rec-list" id="recList"></div>
+  </div>
+
+  <div class="transcript-card">
+    <div class="transcript-head">
+      <span class="transcript-label">文字起こし結果</span>
+      <button class="icon-btn" onclick="copyText()" id="btnCopy">📋</button>
+    </div>
+    <div class="transcript-body" id="tBody"><span class="ph">モードを選んで録音を開始してください</span></div>
+  </div>
+</div>
+
+<script>
+// ── globals ──────────────────────────────────────────────
+let mode = 'A', isRec = false;
+let mediaRec = null, chunks = [], stream = null;
+let timerSec = 0, timerInt = null;
+let recordings = [], selIdx = null, playAudio = null;
+let audioCtx = null, analyser = null, animId = null;
+let recognition = null, finalTx = '', interimTx = '';
+
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const hasMR  = !!window.MediaRecorder;
+const hasSR  = !!SpeechRec;
+
+// DOM shortcuts
+const $ = id => document.getElementById(id);
+const canvas = $('viz'), ctx2d = canvas.getContext('2d');
+
+// ── badge ─────────────────────────────────────────────────
+{
+  const b = $('badge');
+  if (hasMR && hasSR) { b.classList.add('ok'); $('badgeText').textContent = '両モード対応（Safari / Chrome OK）'; }
+  else if (hasMR)     { b.classList.add('warn'); $('badgeText').textContent = 'モードAのみ対応'; }
+  else                { b.classList.add('bad');  $('badgeText').textContent = '録音非対応のブラウザです'; }
+}
+
+// ── canvas ────────────────────────────────────────────────
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx2d.scale(dpr, dpr);
+}
+resize();
+addEventListener('resize', () => { resize(); if (!isRec) idle(); });
+
+function idle() {
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.strokeStyle = '#2e2e33'; ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath(); ctx2d.moveTo(0, h/2); ctx2d.lineTo(w, h/2); ctx2d.stroke();
+}
+idle();
+
+function wave() {
+  if (!analyser) return;
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.strokeStyle = mode === 'B' ? '#5affb8' : '#ff5a5a';
+  ctx2d.lineWidth = 2;
+  ctx2d.beginPath();
+  buf.forEach((v, i) => {
+    const y = (v / 128) * h / 2;
+    i === 0 ? ctx2d.moveTo(0, y) : ctx2d.lineTo(i * (w / buf.length), y);
+  });
+  ctx2d.lineTo(w, h/2); ctx2d.stroke();
+  animId = requestAnimationFrame(wave);
+}
+
+// ── timer ─────────────────────────────────────────────────
+function startTimer() { timerSec = 0; timerInt = setInterval(() => { timerSec++; $('timer').textContent = fmt(timerSec); }, 1000); }
+function stopTimer()  { clearInterval(timerInt); }
+function fmt(s)       { return String(~~(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
+
+// ── mode ──────────────────────────────────────────────────
+function setMode(m) {
+  if (isRec) return;
+  mode = m;
+  $('tabA').classList.toggle('on', m === 'A');
+  $('tabB').classList.toggle('on', m === 'B');
+  $('btnTr').style.display = m === 'A' ? '' : 'none';
+  setTx('<span class="ph">モードを選んで録音を開始してください</span>');
+  st('', '');
+}
+
+// ── main toggle ───────────────────────────────────────────
+function toggle() { isRec ? stop() : start(); }
+
+async function start() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch(e) {
+    st('マイクへのアクセスが許可されていません', 'err'); return;
+  }
+
+  // Visualizer
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+  audioCtx.createMediaStreamSource(stream).connect(analyser);
+  wave();
+
+  isRec = true;
+  $('btnRec').classList.add('on');
+  $('timer').classList.add('rec');
+  startTimer();
+
+  if (mode === 'A') startA();
+  else              startB();
+}
+
+function stop() {
+  if (mode === 'A') stopA();
+  else              stopB();
+
+  isRec = false;
+  $('btnRec').classList.remove('on');
+  $('timer').classList.remove('rec');
+  stopTimer();
+  cancelAnimationFrame(animId);
+  if (audioCtx) { audioCtx.close(); audioCtx = null; analyser = null; }
+  idle();
+}
+
+// ── Mode A ────────────────────────────────────────────────
+function startA() {
+  chunks = [];
+  const mime = ['audio/mp4','audio/webm','audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  mediaRec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRec.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    const blob = new Blob(chunks, { type: mime || 'audio/webm' });
+    const url  = URL.createObjectURL(blob);
+    recordings.push({ blob, url, name: `録音 ${recordings.length + 1}`, dur: timerSec, tx: null });
+    selIdx = recordings.length - 1;
+    $('btnClear').disabled = false;
+    $('btnTr').disabled    = false;
+    renderRecs();
+    st('録音完了。「文字起こし」を押してください', '');
+  };
+  mediaRec.start(200);
+  st('録音中...', 'go');
+}
+
+function stopA() {
+  mediaRec.stop(); // onstop fires async
+}
+
+// ── Mode B ────────────────────────────────────────────────
+function startB() {
+  if (!hasSR) { st('このブラウザはリアルタイム認識に非対応です', 'err'); stop(); return; }
+  finalTx = ''; interimTx = '';
+  setTx('<span id="liveSpan"></span>');
+
+  recognition = new SpeechRec();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = e => {
+    interimTx = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      e.results[i].isFinal ? finalTx += t : interimTx = t;
+    }
+    const el = $('liveSpan');
+    if (el) el.innerHTML =
+      (finalTx ? `<span>${finalTx}</span>` : '') +
+      (interimTx ? `<span class="interim">${interimTx}</span>` : '') +
+      '<span class="cur">|</span>';
+  };
+
+  recognition.onerror = e => {
+    if (e.error !== 'aborted' && e.error !== 'no-speech') st('認識エラー: ' + e.error, 'err');
+  };
+
+  // Auto-restart (iOS sometimes stops mid-session)
+  recognition.onend = () => { if (isRec) { try { recognition.start(); } catch(_){} } };
+
+  recognition.start();
+  $('btnClear').disabled = false;
+  st('話してください（リアルタイムで認識します）', 'go');
+}
+
+function stopB() {
+  if (recognition) { try { recognition.abort(); } catch(_){} recognition = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const el = $('liveSpan');
+  if (el) { const cur = el.querySelector('.cur'); if (cur) cur.remove(); }
+  st('認識完了', '');
+}
+
+// ── Mode A: transcribe via Web Speech ────────────────────
+function doTranscribe() {
+  if (selIdx === null) return;
+  if (!hasSR) { st('このブラウザは音声認識に非対応です。モードBをお試しください', 'err'); return; }
+
+  const rec = recordings[selIdx];
+  $('btnTr').disabled = true;
+  st('文字起こし中（音声を再生して認識しています）...', 'go');
+  setTx('<span class="ph">認識中<span class="cur">|</span></span>');
+
+  let result = '';
+  const recog = new SpeechRec();
+  recog.lang = 'ja-JP';
+  recog.continuous = true;
+  recog.interimResults = false;
+
+  recog.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) result += e.results[i][0].transcript;
+    }
+  };
+
+  recog.onerror = e => { st('認識エラー: ' + e.error, 'err'); };
+
+  recog.onend = () => {
+    rec.tx = result || '（認識できませんでした）';
+    $('tBody').textContent = rec.tx;
+    $('btnTr').disabled = false;
+    st('完了', '');
+    renderRecs();
+  };
+
+  const audio = new Audio(rec.url);
+  recog.start();
+  audio.play().catch(() => {});
+  audio.onended = () => { setTimeout(() => { try { recog.stop(); } catch(_){} }, 800); };
+}
+
+// ── Recordings list ───────────────────────────────────────
+function renderRecs() {
+  if (!recordings.length) { $('recSection').style.display = 'none'; return; }
+  $('recSection').style.display = 'block';
+  const list = $('recList');
+  list.innerHTML = '';
+
+  recordings.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'rec-item' + (i === selIdx ? ' sel' : '');
+
+    const pb = document.createElement('button');
+    pb.className = 'play-btn'; pb.textContent = '▶';
+    pb.onclick = () => {
+      if (playAudio) { playAudio.pause(); playAudio = null; }
+      playAudio = new Audio(r.url);
+      playAudio.play().catch(() => st('再生できませんでした', 'err'));
+      pb.textContent = '■';
+      playAudio.onended = () => { pb.textContent = '▶'; playAudio = null; };
+    };
+
+    const meta = document.createElement('div');
+    meta.className = 'rec-meta';
+    meta.innerHTML = `<div class="rec-name">${r.name}${r.tx ? ' ✓' : ''}</div><div class="rec-dur">${fmt(r.dur)}</div>`;
+
+    const selBtn = document.createElement('button');
+    selBtn.className = 'icon-btn'; selBtn.textContent = '✎'; selBtn.title = '選択';
+    selBtn.onclick = () => {
+      selIdx = i;
+      $('btnTr').disabled = false;
+      $('tBody')[r.tx ? 'textContent' : 'innerHTML'] = r.tx || '<span class="ph">「文字起こし」を押してください</span>';
+      renderRecs();
+    };
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'icon-btn'; delBtn.textContent = '✕'; delBtn.title = '削除';
+    delBtn.onclick = () => {
+      URL.revokeObjectURL(r.url);
+      recordings.splice(i, 1);
+      if (selIdx === i) selIdx = recordings.length ? 0 : null;
+      else if (selIdx > i) selIdx--;
+      if (!recordings.length) { $('btnTr').disabled = true; $('btnClear').disabled = true; }
+      renderRecs();
+    };
+
+    const acts = document.createElement('div');
+    acts.style.cssText = 'display:flex;gap:6px';
+    acts.append(selBtn, delBtn);
+
+    div.append(pb, meta, acts);
+    list.appendChild(div);
+  });
+}
+
+// ── utilities ─────────────────────────────────────────────
+function clearAll() {
+  recordings.forEach(r => URL.revokeObjectURL(r.url));
+  recordings = []; selIdx = null; finalTx = ''; interimTx = '';
+  $('timer').textContent = '00:00'; timerSec = 0;
+  $('btnTr').disabled = true; $('btnClear').disabled = true;
+  setTx('<span class="ph">モードを選んで録音を開始してください</span>');
+  renderRecs(); st('', ''); idle();
+}
+
+function copyText() {
+  const t = $('tBody').innerText?.trim();
+  if (!t || $('tBody').querySelector('.ph')) return;
+  navigator.clipboard.writeText(t).then(() => {
+    $('btnCopy').textContent = '✅';
+    setTimeout(() => $('btnCopy').textContent = '📋', 1500);
+  });
+}
+
+function setTx(html) { $('tBody').innerHTML = html; }
+function st(msg, cls) {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+</script>
+</body>
+</html>
